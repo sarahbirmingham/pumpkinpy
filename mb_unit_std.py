@@ -1,101 +1,158 @@
 import pandas as pd
 import numpy as np
+import re
 import pumpkinpy as ppy
 
-df = pd.read_csv('output_file.csv')
-df.shape
+def basic_std(df):
 
-units = df['IUnits'].value_counts() # 248 -> 133 # 208 -> 56
-len(units)
-for key, val in units.items():
-    print(key, val)
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: str(x).lower().strip())
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: re.sub("[~),]", '', x))
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: '' if x in ['~', 'nan', 'just', 'very', 'homemade', 'generous', 'xl', 'perfectly'] else x)
 
-df['IUnits'] = df.IUnits.apply(lambda x: str(x).lower())
-df['IUnits'] = df.IUnits.apply(lambda x: str(x).replace('~', '').replace(')', '').replace(',', ''))
-df['IUnits'] = df.IUnits.apply(lambda x: 'ounce' if x in ['ounces', 'oz', 'oz.', '-oz', '-oz.', '-ounce', 'oz.)'] else x)
-df['IUnits'] = df.IUnits.apply(lambda x: 'cup' if x in ['cups', 'cu'] else x)
-df['IUnits'] = df.IUnits.apply(lambda x: 'lb' if x in ['lbs', 'lb.', 'pound', 'pounds', 'lbs.'] else x)
-df['IUnits'] = df.IUnits.apply(lambda x: '' if x in ['~', 'nan', 'just', 'very', 'homemade', 'generous', 'xl', 'perfectly'] else x)
-df['IUnits'] = df.IUnits.apply(lambda x: 'tsp' if x in ['teaspoon', 'tps', 'teaspoons'] else x)
-df['IUnits'] = df.IUnits.apply(lambda x: 'tbsp' if x in ['tbsp.', 'Tbs'] else x)
-df['IUnits'] = df.IUnits.apply(lambda x: str(x).replace('~', ''))
-df['INotes'] = df.INotes.apply(lambda x: str(x).replace('(Yes, Tablespoon)', '').replace('(seriously)', '').replace('(yes Tablespoon)', ''))
+def common_unit_std(df):
 
-df['IUnits'] = df.apply(lambda row: 'pinch' if str(row['IFoods']).find('pinch') != -1 else row['IUnits'], axis = 1)
-df['IFoods'] = df.IFoods.apply(lambda x: str(x).replace('pinch', '').strip())
+    common_unit_dict = {'ounce' : ['ounces', 'oz', 'oz.', '-oz', '-oz.', '-ounce', 'oz.)'],
+                        'cup'   : ['cups', 'cu'],
+                        'lb'    : ['lbs', 'lb.', 'pound', 'pounds', 'lbs.'],
+                        'tsp'   : ['teaspoon', 'tps', 'teaspoons'],
+                        'tbsp'  : ['tbsp.', 'Tbs']}
+    
+    common_unit_dict = [[(v, i) for i in common_unit_dict[v]] for v, k in common_unit_dict.items()]
+    common_unit_dict = [i for sublist in common_unit_dict for i in sublist]
+    common_unit_dict = {i[1] : i[0] for i in common_unit_dict}    
 
-df['IUnits'] = df.apply(lambda row: str(row['IUnits']) + str(row['IFoods']) if len(str(row['IFoods'])) == 1 else row['IUnits'], axis = 1)
-df['IFoods'] = df.apply(lambda row: str(row['INotes']) if len(str(row['IFoods'])) == 1 else row['IFoods'], axis = 1)
-df['INotes'] = df.apply(lambda row: str(row['IFoods'])[str(row['IFoods']).find('('):str(row['IFoods']).find(')')+1] if str(row['IFoods']).find('(') != -1 else str(row['INotes']), axis = 1)
-df['IFoods'] = df.apply(lambda row: str(row['IFoods']).replace(str(row['INotes']), '') if str(row['INotes']) != 'nan' else str(row['IFoods']), axis = 1)
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: common_unit_dict[x] if x in common_unit_dict.keys() else x)
 
-df['IUnits'] = df.apply(lambda row: row['IFoods'][:row['IFoods'].find(' ')].strip() if row['IUnits'] == 'heaping' else row['IUnits'], axis = 1)
+def plurals(df):
+    
+    plurals = {'cups' : 'cup', 'cloves' : 'clove', 'stalks' : 'stalk', 'slices' : 'slice', 'sprigs' : 'sprig', 
+                'batches' : 'batch', 'scoops' : 'scoop', 'ears' : 'ear', 'leaves' : 'leaf', 'pinches' : 'pinch',
+                'packets' : 'packet', 'sheets' : 'sheet', 'heads' : 'head', 'squares' : 'square', 'dashes' : 'dash',
+                'pieces' : 'piece', 'rounds' : 'round', 'shots' : 'shot', 'cans' : 'can', 'ribs' : 'rib',
+                'sticks' : 'stick', 'capsules' : 'capsule', 'bundles' : 'bundle', 'jars' : 'jar'}
+    
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: plurals[x] if x in list(plurals.keys()) else x)
 
-plurals = {'cups' : 'cup', 'cloves' : 'clove', 'stalks' : 'stalk', 'slices' : 'slice', 'sprigs' : 'sprig', 
-           'batches' : 'batch', 'scoops' : 'scoop', 'ears' : 'ear', 'leaves' : 'leaf', 'pinches' : 'pinch',
-           'packets' : 'packet', 'sheets' : 'sheet', 'heads' : 'head', 'squares' : 'square', 'dashes' : 'dash',
-           'pieces' : 'piece', 'rounds' : 'round', 'shots' : 'shot', 'cans' : 'can', 'ribs' : 'rib',
-           'sticks' : 'stick', 'capsules' : 'capsule', 'bundles' : 'bundle'}
+def misc(df):
 
-df['IUnits'] = df.IUnits.apply(lambda x: plurals[x] if x in list(plurals.keys()) else x)
+    df['ingredUnit'] = df.apply(lambda row: 'pinch' 
+                                if     str(row['ingredItem']).find('pinch') != -1 
+                                else   row['ingredUnit'], 
+                                axis = 1)
+    
+    df['ingredItem'] = df.ingredItem.apply(lambda x: str(x).replace('pinch', '').strip())
 
-desc = ['ripe', 'pitted', 'fresh', 'dried', 'frozen', 'organic', 'homemade', 'sliced']
+    df['ingredItem'] = df.apply(lambda row: str(row['ingredUnit']) + str(row['ingredItem']) 
+                                if     len(str(row['ingredItem'])) == 1 
+                                else   row['ingredItem'], 
+                                axis = 1)
+    
+    df['ingredUnit'] = df.apply(lambda row: row['ingredItem'][:row['ingredItem'].find(' ')].strip() 
+                                if     row['ingredUnit'] == 'heaping' 
+                                else   row['ingredUnit'], 
+                                axis = 1)
 
-df['INotes'] = df.apply(lambda row: str(row['IUnits']) + ', ' + str(row['INotes']) if str(row['IUnits']) in desc else str(row['INotes']), axis = 1)
-df['INotes'] = df.INotes.apply(lambda x: x.replace(', nan', '').strip())
-df['IUnits'] = df.IUnits.apply(lambda x: '' if x in desc else x)
+    desc = ['ripe', 'pitted', 'fresh', 'dried', 'frozen', 'organic', 'homemade', 'sliced']
 
-size = ['medium', 'large', 'small', 'medium-large', 'small-medium', 'big', 'medium-sized', 'standard-size', 'mini', 'medium-size', 'burrito-size', 
-        'average-size', 'quarter-size']
+    df['ingredNotes'] = df.apply(lambda row: str(row['ingredUnit']) + ', ' + str(row['ingredNotes']) 
+                                if      str(row['ingredUnit']) in desc 
+                                else    str(row['ingredNotes']), 
+                                axis = 1)
+    df['ingredNotes'] = df.ingredNotes.apply(lambda x: x.replace(', nan', '').strip())
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: '' 
+                                           if     x in desc 
+                                           else   x)
 
-df['INotes'] = df.apply(lambda row: str(row['IUnits']) + ', ' + str(row['INotes']) if str(row['IUnits']) in size else str(row['INotes']), axis = 1)
-df['INotes'] = df.INotes.apply(lambda x: x.replace(', nan', '').strip())
-df['IUnits'] = df.IUnits.apply(lambda x: '' if x in size else x)
-
-food = ['chipotle', 'red', 'medjool', 'lemon', 'white', 'corn', 'serrano', 'bay', 'coconut', 'green', 'lemons', 'egg', 'spring', 
-        'baby', 'thai', 'probiotic', 'lime', 'tart', 'yellow', 'mint', 'rice', 'ciabatta', 'milk', 'bell', 'grapfruit', 'sugar', 
-        'brown', 'brownies', 'basil',  'kumquats', 'candy', 'wonton', 'bosc', 'granny', 'russet', 'button', 'sweet', 'ginger', 
-        'vanilla', 'mild', 'black', 'bones', 'boneless', 'makrut', 'kale', 'habanero', 'tea', 'roma', 'jalapeño', 'poblano', 'blood', 
-        'pita', 'cherry', 'delicata', 'rooibos', 'cinnamon', 'portobello', 'roasted', 'peeled', 'ice', 'thinly', 'raw', 'jumbo', 'watermelon']
-
-df['IFoods'] = df.apply(lambda row: str(row['IUnits']) + ' ' + str(row['IFoods']) if str(row['IUnits']) in food else str(row['IFoods']), axis = 1)
-df['IUnits'] = df.IUnits.apply(lambda x: '' if x in food else x)
-
-steal = ['heaping', 'scant', 'heaped', 'rounded']
-
-df['IUnits'] = df.apply(lambda row: row['IFoods'][:row['IFoods'].find(' ')].strip() if row['IUnits'] in steal else row['IUnits'], axis = 1)
-
-combine1 = ['minute', 'ingredient']
-
-df['IFoods'] = df.apply(lambda row: str(row['IValues']) + str(row['IUnits']) + ' ' + str(row['IFoods']) if str(row['IUnits']) in combine1 else row['IFoods'], axis = 1)
-df['IValues'] = df.apply(lambda row: '' if str(row['IUnits']) in combine1 else row['IValues'], axis = 1)
-df['IUnits'] = df.apply(lambda row: '' if str(row['IUnits']) in combine1 else row['IUnits'], axis = 1)
-
-combine2 = ['-', 'inch-long']
-
-df['IFoods'] = df.apply(lambda row: (row['IValues'][row['IValues'].find(' '):] + row['IUnits'] + row['IFoods']).strip() if str(row['IUnits']) in combine2 else row['IFoods'], axis = 1)
-df['IValues'] = df.apply(lambda row: row['IValues'][:row['IValues'].find(' ')] if str(row['IUnits']) in combine2 else row['IValues'], axis = 1)
-df['IUnits'] = df.IUnits.apply(lambda x: '' if str(x) in combine2 else x)
-
-discard = ['just', 'very', 'homemade', 'generous', 'xl', 'whole', 'th', 'quot;honeyquot;', 'more', 'vegan-friendly', 'of', 'cu', 'Tbs']
-
-df['IUnits'] = df.IUnits.apply(lambda x: '' if x in discard else x)
-df['IUnits'] = df.IUnits.apply(lambda x: 'cup' if x == 'cupp' else x)
-
-df['IFoods'] = df.apply(lambda row: 'tortillas' if row['IUnits'] == 'tortillas' else row['IFoods'], axis = 1)
-df['IUnits'] = df.IUnits.apply(lambda x: '' if x == 'tortillas' else x)
-
-df['IFoods'] = df.apply(lambda row: row['IUnits'] + ' ' + row['IFoods'] if row['IUnits'] == 'salmon' else row['IFoods'], axis = 1)
-df['IUnits'] = df.IUnits.apply(lambda x: '' if x == 'salmon' else x)
-
-df['IFoods'] = df.apply(lambda row: row['IUnits'] if row['IUnits'] == 'kumquats,' else row['IFoods'], axis = 1)
-df['IUnits'] = df.IUnits.apply(lambda x: '' if x == 'kumquats,' else x)
-
-df['IFoods'] = df.apply(lambda row: row['IUnits'] + ' ' + row['IFoods'] if row['IUnits'] == 'skin-on' else row['IFoods'], axis = 1)
-df['IUnits'] = df.IUnits.apply(lambda x: '' if x == 'skin-on' else x)
-
-df['IUnits'] = df.IUnits.apply(lambda x: '' if x == 'vegan' else x.lower())
-
-df.to_csv('output_file.csv', index = False)
+    size = ['medium', 'large', 'small', 'medium-large', 'small-medium', 'big', 'medium-sized', 'standard-size', 'mini', 'medium-size', 'burrito-size', 
+            'average-size', 'quarter-size']
 
 
+    df['ingredNotes'] = df.apply(lambda row: str(row['ingredUnit']) + ', ' + str(row['ingredNotes']) 
+                                 if     str(row['ingredUnit']) in size 
+                                 else   str(row['ingredNotes']), 
+                                 axis = 1)
+    
+    df['ingredNotes'] = df.ingredNotes.apply(lambda x: x.replace(', nan', '').strip())
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: '' 
+                                           if     x in size 
+                                           else   x)
+
+    food = ['chipotle', 'red', 'medjool', 'lemon', 'white', 'corn', 'serrano', 'bay', 'coconut', 'green', 'lemons', 'egg', 'spring', 
+            'baby', 'thai', 'probiotic', 'lime', 'tart', 'yellow', 'mint', 'rice', 'ciabatta', 'milk', 'bell', 'grapfruit', 'sugar', 
+            'brown', 'brownies', 'basil',  'kumquats', 'candy', 'wonton', 'bosc', 'granny', 'russet', 'button', 'sweet', 'ginger', 
+            'vanilla', 'mild', 'black', 'bones', 'boneless', 'makrut', 'kale', 'habanero', 'tea', 'roma', 'jalapeño', 'poblano', 'blood', 
+            'pita', 'cherry', 'delicata', 'rooibos', 'cinnamon', 'portobello', 'roasted', 'peeled', 'ice', 'thinly', 'raw', 'jumbo', 'watermelon']
+
+    df['ingredItem'] = df.apply(lambda row: str(row['ingredUnit']) + ' ' + str(row['ingredItem']) 
+                                if     str(row['ingredUnit']) in food 
+                                else   str(row['ingredItem']), 
+                                axis = 1)
+    
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: '' 
+                                           if     x in food 
+                                           else   x)
+
+    steal = ['heaping', 'scant', 'heaped', 'rounded']
+
+    df['ingredUnit'] = df.apply(lambda row: row['ingredItem'][:row['ingredItem'].find(' ')].strip() 
+                                if     row['ingredUnit'] in steal 
+                                else   row['ingredUnit'],
+                                axis = 1)
+
+    combine1 = ['minute', 'ingredient']
+
+    df['ingredItem'] = df.apply(lambda row: str(row['ingredAmount']) + str(row['ingredUnit']) + ' ' + str(row['ingredItem']) 
+                                if     str(row['ingredUnit']) in combine1 
+                                else   row['ingredItem'], 
+                                axis = 1)
+    df['ingredAmount'] = df.apply(lambda row: '' 
+                                  if     str(row['ingredUnit']) in combine1 
+                                  else row['ingredAmount'], 
+                                  axis = 1)
+    df['ingredUnit'] = df.apply(lambda row: '' 
+                                if     str(row['ingredUnit']) in combine1 
+                                else row['ingredUnit'], 
+                                axis = 1)
+
+    combine2 = ['-', 'inch-long']
+
+    df['ingredItem'] = df.apply(lambda row: (row['ingredAmount'][row['ingredAmount'].find(' '):] + row['ingredUnit'] + row['ingredItem']).strip() 
+                                if     str(row['ingredUnit']) in combine2 
+                                else   row['ingredItem'], 
+                                axis = 1)
+
+    df['ingredAmount'] = df.apply(lambda row: row['ingredAmount'][:row['ingredAmount'].find(' ')] 
+                                  if     str(row['ingredUnit']) in combine2 
+                                  else   row['ingredAmount'], 
+                                  axis = 1)
+    
+    discard = ['just', 'very', 'homemade', 'generous', 'xl', 'whole', 'th', 'quot;honeyquot;', 
+               'more', 'vegan-friendly', 'of', 'cu', 'Tbs', 'jalapeñ', 'brownie', 
+               'ripe', 'eg', '-', 'inch-long', 'vegan', '(seriously)', '(packed)']
+
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: '' if x in discard else x)
+
+    df['ingredItem'] = df.apply(lambda row: 'tortillas' if row['ingredUnit'] == 'tortillas' else row['ingredItem'], axis = 1)
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: '' if x == 'tortillas' else x)
+
+    df['ingredItem'] = df.apply(lambda row: row['ingredUnit'] + ' ' + row['ingredItem'] if row['ingredUnit'] == 'salmon' else row['ingredItem'], axis = 1)
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: '' if x == 'salmon' else x)
+
+    df['ingredItem'] = df.apply(lambda row: row['ingredUnit'] if row['ingredUnit'] == 'kumquats,' else row['ingredItem'], axis = 1)
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: '' if x == 'kumquats' else x)
+
+    df['ingredItem'] = df.apply(lambda row: row['ingredUnit'] + ' ' + row['ingredItem'] if row['ingredUnit'] == 'skin-on' else row['ingredItem'], axis = 1)
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: '' if x == 'skin-on' else x)
+
+    df['ingredUnit'] = df.ingredUnit.apply(lambda x: x.lower())
+
+def standardize_units(df):
+
+    ppy.get_val_count(df, 'ingredUnit', 'unit')
+    basic_std(df)
+    common_unit_std(df)
+    plurals(df)
+    misc(df)
+    ppy.get_val_count(df, 'ingredUnit', 'unit')
+
+    return(df)
